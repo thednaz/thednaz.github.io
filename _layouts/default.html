@@ -2,7 +2,7 @@
 <html lang="{{ site.lang | default: "en-US" }}">
   <head>
 
-    {% if site.google_analytics %}
+    {% if site.google_analytics and jekyll.environment == 'production' %}
     {% include google_analytics.html %}
     {% endif %}
     <meta charset="UTF-8">
@@ -31,10 +31,26 @@
     </div>
     </header>
 
-   
-
     <main id="content" class="main-content" role="main">
       {{ content }}
+    
+      {% if page.comments %}
+      <div id="disqus_thread"></div>
+      <script>    
+          var disqus_config = function () {
+          this.page.url = "https://thednaz.github.io{{ page.url }}";
+          this.page.identifier = "{{ page.date }}-{{ page.title }}";
+          };
+        
+          (function() { // DON'T EDIT BELOW THIS LINE
+          var d = document, s = d.createElement('script');
+          s.src = 'https://thednaz.disqus.com/embed.js';
+          s.setAttribute('data-timestamp', +new Date());
+          (d.head || d.body).appendChild(s);
+          })();
+      </script>
+      <noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+      {% endif %}
 
       <footer class="site-footer">
         {% if site.github.is_project_page %}
