@@ -7,7 +7,7 @@ published: true
 excerpt_separator: <!--more-->
 ---
 
-# Basics of Asyncs - Part 1 - Cancellation
+# Mission Asyncable - The Basics of Asyncs - Part 1: Cancellation
 
 ## Motivation
 On my team, we've been running into a few microservices stalling and other production issues, due to some nuanced assumptions around Async and cancellations. Knowing the fundamentals is important, and I thought it'd be a useful experience to review them, perhaps from a different angle.
@@ -206,7 +206,7 @@ Notice team 1 cancels as usually, but team 2 doesn't.
 
 ### Tasks and Tokens
 
-If your `Async` workflows are inter-operating with `Task`s, and you anticipate using cancellation, then you need to pass CancellationTokens when the `Task` is started.
+If your `Async` workflows are inter-operating with `Task`, and you anticipate using cancellation, then you need to pass CancellationTokens when the `Task` is started.
 
 Code
 
