@@ -7,6 +7,8 @@ published: true
 excerpt_separator: <!--more-->
 ---
 
+_This post is part of F# Advent Calendar 2020. Check out other posts [here](https://sergeytihon.com/2020/10/22/f-advent-calendar-in-english-2020/)._
+
 ## Motivation
 On my team, we've been running into a few microservices stalling and other production issues, due to some nuanced assumptions around Async and cancellations. Knowing the fundamentals is important, and I thought it'd be a useful experience to review them, perhaps from a different angle.
 
