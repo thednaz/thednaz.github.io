@@ -7,8 +7,6 @@ published: true
 excerpt_separator: <!--more-->
 ---
 
-# Mission Asyncable - The Basics of Asyncs - Part 1: Cancellation
-
 ## Motivation
 On my team, we've been running into a few microservices stalling and other production issues, due to some nuanced assumptions around Async and cancellations. Knowing the fundamentals is important, and I thought it'd be a useful experience to review them, perhaps from a different angle.
 
