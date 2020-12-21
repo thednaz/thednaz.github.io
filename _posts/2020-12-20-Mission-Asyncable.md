@@ -302,12 +302,10 @@ But wait, I hear you say, you've sneaked in some new code. What is this `Async.C
 
 ### Sub groups
 
-As we mentioned above, what if we only want to cancel a certain group of Asyncs, but leave the rest running? That's where the `CancellationTokenSource.CreateLinkedTokenSource` method comes in. It creates a new `CancellationTokenSource` that will cancel if the passed-in token cancels. Since it's a separate source however, if it's cancelled, then only workflows working off of that source will be cancelled. That's a mouthful, so let's look at some examples.
-
+As we mentioned above, what if we only want to cancel a certain group of Asyncs, but leave the rest running? That's where the `CancellationTokenSource.CreateLinkedTokenSource` method comes in. It creates a new `CancellationTokenSource` that will cancel if the passed-in token cancels. Since it's a separate source however, if it's cancelled, then only workflows working off of that source will be cancelled. That's a mouthful, so let's look at some examples. (Notice we have some new code for `linkedCts` and a function for cancelling tokens related to it).
 Code
 
 ```fsharp
-
 let linkedCts = CancellationTokenSource.CreateLinkedTokenSource(Async.DefaultCancellationToken)
 
 let t1 = Async.StartAsTask(infiltrators 1, cancellationToken=linkedCts.Token)
@@ -330,7 +328,6 @@ Done
 Code
 
 ```fsharp
-
 // cancels tokens related to linkedCts
 let cancelLinkedTokenAsync sleepMs = async {
     do! Async.Sleep sleepMs
