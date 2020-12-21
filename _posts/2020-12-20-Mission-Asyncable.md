@@ -43,7 +43,6 @@ This is shared code that will be used in the examples below.
 
 ```fsharp
 let customCts = new CancellationTokenSource()
-let linkedCts = CancellationTokenSource.CreateLinkedTokenSource(Async.DefaultCancellationToken)
 
 // A bit redundant, trying to keep code simple
 let cancelDefaultTokenAsync sleepMs = async {
@@ -55,12 +54,6 @@ let cancelDefaultTokenAsync sleepMs = async {
 let cancelCustomTokenAsync sleepMs = async {
     do! Async.Sleep sleepMs
     customCts.Cancel()
-}
-
-// cancels tokens related to linkedCts
-let cancelLinkedTokenAsync sleepMs = async {
-    do! Async.Sleep sleepMs
-    linkedCts.Cancel()
 }
 
 let whenAll (tasks: IEnumerable<Task>) =
@@ -181,7 +174,7 @@ Code
 
 ```fsharp
 let t1 = infiltrators 1 |> Async.StartAsTask
-let t2 = Async.StartAsTask(infiltrators 2, cancellationToken=cts.Token)
+let t2 = Async.StartAsTask(infiltrators 2, cancellationToken=customCts.Token)
 let cancelDefault = cancelDefaultTokenAsync 3000 |> Async.StartAsTask
 whenAll([t1; t2; cancelDefault])
 ```
@@ -314,6 +307,9 @@ As we mentioned above, what if we only want to cancel a certain group of Asyncs,
 Code
 
 ```fsharp
+
+let linkedCts = CancellationTokenSource.CreateLinkedTokenSource(Async.DefaultCancellationToken)
+
 let t1 = Async.StartAsTask(infiltrators 1, cancellationToken=linkedCts.Token)
 let cancelDefault = cancelDefaultTokenAsync 3000 |> Async.StartAsTask
 whenAll([t1; cancelDefault])
@@ -334,9 +330,16 @@ Done
 Code
 
 ```fsharp
+
+// cancels tokens related to linkedCts
+let cancelLinkedTokenAsync sleepMs = async {
+    do! Async.Sleep sleepMs
+    linkedCts.Cancel()
+}
+
 let t1 = Async.StartAsTask(infiltrators 1, cancellationToken=linkedCts.Token)
 let t2 = infiltrators 2 |> Async.StartAsTask
-let cancelLinked = cancelLinkedCts 3000 |> Async.StartAsTask // notice we're cancelling only the linked one here!
+let cancelLinked = cancelLinkedTokenAsync 3000 |> Async.StartAsTask // notice we're cancelling only the linked one here!
 whenAll([t1; t2; cancelLinked])
 ```
 
