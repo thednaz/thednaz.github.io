@@ -13,7 +13,7 @@ On my team, we've been running into a few microservices stalling and other produ
 ## CancellationTokens
 One of the more "invisible" aspects of Async workflows in F# are [CancellationTokens](https://docs.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=net-5.0). They are constructs that are implicitly passed through Async workflows to enable cooperative cancellation.
 
-Let's break that down. They're _implicitly passed through_ in the sense that a parent Async's token is also given to child workflows it awaits. By awaits, I mean a child workflow that is handed over control to when the parent workflow awaits it by calling `let!` or `do!` (note: this can be circumvented, as will be explained below). By _cooperative_, we mean that a "well-behaved" Async workflow is supposed to inspect the token to see if cancellation's been requested. It behaves like a good citizen by cancelling the current workflow as quickly as possible, but there are no guarantees it will do so. 
+Let's break that down. They're _implicitly passed through_ in the sense that a parent Async's `CancellationToken` is forwarded to child workflows it spawns. By spawns, I mean a child workflow that is handed over control to, usually via `let!` or `do!` on an `Async<'T>` (Note: this propagation can be circumvented, as will be explained below). By _cooperative_, we mean that a "well-behaved" Async workflow is supposed to inspect the token to see if cancellation's been requested. It behaves like a good citizen by cancelling the current workflow as quickly as possible, but this is only an expectation, there are no guarantees it will do so.
 
 <!--more-->
 
@@ -111,7 +111,7 @@ We're running an `Async` task with nested workflows (surveillance/infiltrators),
 
 This is what is meant by _implicitly passed through_. Each child `Async` is working off of the same `CancellationToken`, so once cancellation is requested (i.e. ABORT!), all the Asyncs stop working and exit.
 
-Notice that the cancel method is calling `Async.CancelDefaultToken`. As you may have surmised, being the default and all, that's what's passed into your Async when it's started. There's nothing special about this token, and we could've passed in our own, as long as we _remember to cancel on that same token_.
+Notice that the cancel method is calling `Async.CancelDefaultToken`. We didn't explicitly pass a `CancellationToken`, but we did observe cancellation. As you may have surmised, there's a default `CancellationToken` that's passed into your Async when it's started. This token is unique in that it's shared by default by all `Async` workflows, but other than that there's nothing special about it. We could've passed in our own, as long as we _remember to trigger cancellation via that same_ `CancellationTokenSource`. (Keep in mind the name CancelDefault**Token** is slightly misleading; we're technically requesting cancellation on the `CancellationTokenSource` that backs that `CancellationToken`.)
 
 ### Custom CancellationToken 
 
@@ -162,11 +162,11 @@ Team 1 Infiltrating
 Done
 ```
 
-This could result in unexpected behavior if you're not aware of it.
+Notice how cancellation on the `DefaultCancellationToken` took out both teams (and that's not a good attack plan is it?). This could result in unexpected behavior if you're not aware of it.
 
 ### Custom CancellationToken while cancelling default
 
-You can invoke a workflow with a custom `CancellationToken`, but if you're still cancelling on the default token, that workflow won't cancel.
+You can invoke a workflow with a custom `CancellationToken`, but if you're still cancelling on the default one, that workflow won't cancel.
 
 Code
 
@@ -193,11 +193,11 @@ Team 2 infiltration complete
 Done
 ```
 
-Notice team 1 cancels as usually, but team 2 doesn't.
+Team 1 cancels, but team 2 doesn't.
 
 ### Tasks and Tokens
 
-If your `Async` workflows are inter-operating with `Task`, and you anticipate using cancellation, then you need to pass CancellationTokens when the `Task` is started.
+If your `Async` workflows are inter-operating with TPL `Task`, in order to support cancellation (hint: you should), then you need to explicitly pass CancellationTokens when the `Task` is started. Typically, `Async`/`Task` functions that do I/O or sleep will have overloads that accept `CancelltionToken`.
 
 Code
 
@@ -222,9 +222,9 @@ Team 2 as task done
 Done
 ```
 
-Notice that infiltrators cancel after 3 seconds due to cancelDefault, but "Team 2 as task done" still finishes after 5 seconds, because it hasn't been given a token.
+Notice that infiltrators cancel after 3 seconds due to `cancelDefaultTokenAsync`, but "Team 2 as task done" still finishes after 5 seconds, because it hasn't been passed a token.
 
-We can get the task to honor the cancellation request by passing it in to the task:
+We can get have the TPL `Task` honor the cancellation request by using the overload where we can supply it:
 
 Code
 
@@ -242,7 +242,7 @@ Infiltrator team 1: Starting
 Team 1 Infiltrating
 Team 1 Infiltrating
 Team 1 Infiltrating
-Team 2 as task done (happens immediately after)
+Team 2 as task done (<-- happens immediately after)
 Done
 ```
 
@@ -253,7 +253,7 @@ This can lead to surprises when you have an `Async` workflow that awaits a `Task
 ### Cooperation
 How does an individual `Async` workflow know that it's time to cancel? Well, remember what we said above: CancellationTokens allow for a _cooperative_ cancellation model. That means once an Async's `CancellationToken` is signaled, it's expected to cooperate and stop its execution, but this isn't guaranteed. We're going to call these non-cooperative workflows the rogue agents of the Async world.
 
-Usually, I/O operations that are returned as `Async`/`Task` will respect cancellation, as will `Async.Sleep`/`Task.Delay`. However, if an `Async`/`Task` is doing a compute-heavy operation, it should be checking for cancellation in between computation steps; this is done by inspecting the `IsCancellationRequested` on the `CancellationToken`.
+Usually, I/O operations that are returned as `Async`/`Task` will respect cancellation, as will `Async.Sleep`/`Task.Delay`. However, if an `Async`/`Task` is doing a compute-heavy operation, it should be checking for cancellation periodically; this is done by inspecting the `IsCancellationRequested` on the `CancellationToken`.
 
 Code
 
@@ -266,7 +266,7 @@ let rogueInfiltrators teamNumber =
                 
                 // this is a terrible way to busy wait
                 let sw = Stopwatch.StartNew()
-                while (sw.ElapsedMilliseconds < 1000L) do
+                while sw.ElapsedMilliseconds < 1000L do
                     let mutable x = 1
                     for i in 1..10000 do
                         x <- x + 1
@@ -296,11 +296,12 @@ Done
 
 This code loops with a meaningless computation to simulate some CPU intensive work. It'll only continue if the `IsCancellationRequested` property is false, and the wait time is positive. If you comment out the line to check cancellation requests, you'll see it won't respect cancellation at all.
 
-But wait, I hear you say, you've sneaked in some new code. What is this `Async.CancellationToken`? This returns the `CancellationToken` assigned to that Async; it's what's being passed from parent to child Asyncs, and what we should be using to check cancellation on, since we can't assume it'll always be the default token.
+But wait, I hear you say, you've snuck in some new code. What is this `Async.CancellationToken`? This returns what is referred to as the _ambient_ `CancellationToken` assigned to that Async, i.e. the `CancellationToken` fed through the tree of computations in a nested Async workflow. It's what's being passed from parent to child Asyncs, and what we should be using to check cancellation on, since we can't assume it'll always be the default token.
 
 ### Sub groups
 
 As we mentioned above, what if we only want to cancel a certain group of Asyncs, but leave the rest running? That's where the `CancellationTokenSource.CreateLinkedTokenSource` method comes in. It creates a new `CancellationTokenSource` that will cancel if the passed-in token cancels. Since it's a separate source however, if it's cancelled, then only workflows working off of that source will be cancelled. That's a mouthful, so let's look at some examples. (Notice we have some new code for `linkedCts` and a function for cancelling tokens related to it).
+
 Code
 
 ```fsharp
@@ -355,10 +356,10 @@ Team 2 infiltration complete
 Done
 ```
 
-But if **only** `linkedCts` is cancelled, then only the Async workflows running off of it will cancel; everything else still runs.
+But if **only** `linkedCts` is cancelled, then only team 1 (which is running off of it) cancels; team 2 isn't aware of any cancellation.
 
 ### Where can I specify CancellationTokens?
-CancellationTokens are required when starting an `Async` workflow (except for `StartChildAsTask`). The functions which start them are documented [here](https://fsharp.github.io/fsharp-core-docs/reference/fsharp-control-fsharpasync.html#section0), and copied below.
+Every Async workflow has an _ambient_ `CancellationToken` associated with it; if you don't supply a value for `CancellationToken` then `Async.DefaultCancellationToken` is used (except for `StartChildAsTask`). The functions which start them are documented [here](https://fsharp.github.io/fsharp-core-docs/reference/fsharp-control-fsharpasync.html#section0), and copied below.
 	
 * `Async.RunSynchronously(computation, ?timeout, ?cancellationToken)`
 * `Async.Start(computation, ?cancellationToken)`
@@ -367,17 +368,17 @@ CancellationTokens are required when starting an `Async` workflow (except for `S
 * `Async.StartImmediateAsTask(computation, ?cancellationToken)`
 * `Async.StartWithContinuations(computation, continuation, exceptionContinuation, cancellationContinuation, ?cancellationToken)`
 
-Notice that one of the functions, `Async.StartChildAsTask(computation, ?taskCreationOptions)`, doesn't take in a `CancellationToken`. This is because it's a child of the current `Async` workflow (like we saw above) just wrapped in a Task, which mean it'll inherit the parent Async's `CancellationToken`.
+_If you use any of these functions to start an Async workflow inside another Async workflow, they won't necessarily share the same CancellationToken (unless they're all using the default one)_.
 
-Also, if you use any of these functions to start an Async workflow _inside_ another Async workflow, they won't necessarily share the same CancellationToken (unless they're all using the default one).
+Notice that one of the functions, `Async.StartChildAsTask(computation, ?taskCreationOptions)`, doesn't take in a `CancellationToken`. This is because it's a child of the current `Async` workflow (like we saw above) just wrapped in a Task, which mean it'll inherit the parent Async's `CancellationToken`.
 
 # Conclusion
 We've looked at the cancellation aspect of `Async` workflows:
 * how default tokens are passed around
 * how to pass in custom cancellation tokens
-* how `Async` cancellation interacts with `Task`
+* how `Async` cancellation interacts with TPL `Task`
 * how to make sure a compute-heavy workflow respects cancellation requests
-* how to use `LinkedTokenSource` to create sub-groups of cancellable workflows
+* how to use a `LinkedTokenSource` to create sub-groups of independently cancellable workflows
 * how they suspiciously relate to the world of espionage
 
 That's it for this time. In part 2 we'll go over some aspects of `Async.Parallel` and how it relates to what we've learned here. This post will self destruct in 5 seconds.
