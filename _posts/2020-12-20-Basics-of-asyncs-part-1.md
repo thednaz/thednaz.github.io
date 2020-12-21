@@ -10,12 +10,12 @@ excerpt_separator: <!--more-->
 # Basics of Asyncs - Part 1 - Cancellation
 
 ## Motivation
-On my team, we've been running into a few microservices stalling and other production issues, due to some nuanced assumptions around Async and cancellations. Revisiting fundamentals is important, and I thought it'd be a useful experience to go over them, perhaps from a different angle.
+On my team, we've been running into a few microservices stalling and other production issues, due to some nuanced assumptions around Async and cancellations. Knowing the fundamentals is important, and I thought it'd be a useful experience to review them, perhaps from a different angle.
 
 ## CancellationTokens
-One of the more "invisible" aspects of Async workflows in F# are [CancellationTokens](https://docs.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=net-5.0). They are constructs that are automatically passed through Async workflows to enable cooperative cancellation.
+One of the more "invisible" aspects of Async workflows in F# are [CancellationTokens](https://docs.microsoft.com/en-us/dotnet/api/system.threading.cancellationtoken?view=net-5.0). They are constructs that are implicitly passed through Async workflows to enable cooperative cancellation.
 
-Let's break that down. They're _automatically passed through_ in the sense that a parent Async's token is also given to child workflows it awaits (note: this can be circumvented, as will be explained below). By _cooperative_, we mean that a "well-behaved" Async workflow is supposed to inspect the token to see if cancellation's been requested. It behaves like a good citizen by cancelling the current workflow as quickly as possible, but there are no guarantees it will do so. 
+Let's break that down. They're _implicitly passed through_ in the sense that a parent Async's token is also given to child workflows it awaits. By awaits, I mean a child workflow that is handed over control to when the parent workflow awaits it by calling `let!` or `do!` (note: this can be circumvented, as will be explained below). By _cooperative_, we mean that a "well-behaved" Async workflow is supposed to inspect the token to see if cancellation's been requested. It behaves like a good citizen by cancelling the current workflow as quickly as possible, but there are no guarantees it will do so. 
 
 <!--more-->
 
@@ -51,13 +51,13 @@ let cancelDefaultTokenAsync sleepMs = async {
     Async.CancelDefaultToken()    
 }
 
-// cancels tokens generated from customCts
+// cancels tokens related to customCts
 let cancelCustomTokenAsync sleepMs = async {
     do! Async.Sleep sleepMs
     cts.Cancel()
 }
 
-// cancels tokens generated from linkedCts
+// cancels tokens related to linkedCts
 let cancelLinkedTokenAsync sleepMs = async {
     do! Async.Sleep sleepMs
     linkedCts.Cancel()
@@ -96,7 +96,7 @@ let missionLeader teamNumber = async {
 }
 ```
 
-### CancellationToken automatic passing
+### Implicit CancellationToken passing
 
 Code
 ```fsharp
@@ -116,9 +116,9 @@ Team 1 Infiltrating
 Done
 ```
 
-We're running an `Async` task with nested workflows (surveillance/infiltrators), and an `Async` that will cancel the default token (we'll get to that soon) after 3 seconds. You can see "infiltrating" printed thrice, after which all workflows are cancelled, we can see this because "Done" is printed once all Tasks are done.
+We're running an `Async` task with nested workflows (surveillance/infiltrators), and an `Async` that will cancel the default token (we'll get to that soon) after 3 seconds. You can see "infiltrating" printed thrice, after which all workflows are cancelled. `whenAll` will print "Done" when all Tasks are done.
 
-This is what is meant by _automatically passed through_. Each child `Async` is working off of the same `CancellationToken`, so once cancellation is requested (i.e. ABORT!), all the Asyncs stop working and exit.
+This is what is meant by _implicitly passed through_. Each child `Async` is working off of the same `CancellationToken`, so once cancellation is requested (i.e. ABORT!), all the Asyncs stop working and exit.
 
 Notice that the cancel method is calling `Async.CancelDefaultToken`. As you may have surmised, being the default and all, that's what's passed into your Async when it's started. There's nothing special about this token, and we could've passed in our own, as long as we _remember to cancel on that same token_.
 
@@ -370,6 +370,8 @@ CancellationTokens are required when starting an `Async` workflow (except for `S
 * `Async.StartWithContinuations(computation, continuation, exceptionContinuation, cancellationContinuation, ?cancellationToken)`
 
 Notice that one of the functions, `Async.StartChildAsTask(computation, ?taskCreationOptions)`, doesn't take in a `CancellationToken`. This is because it's a child of the current `Async` workflow (like we saw above) just wrapped in a Task, which mean it'll inherit the parent Async's `CancellationToken`.
+
+Also, if you use any of these functions to start an Async workflow _inside_ another Async workflow, they won't necessarily share the same CancellationToken (unless they're all using the default one).
 
 # Conclusion
 We've looked at the cancellation aspect of `Async` workflows:
