@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Basics of Asyncs - Part 1 - Cancellation"
+title: "Mission Asyncable - The Basics of Asyncs - Part 1: Cancellation"
 date: 2020-12-20-00:00:00 -0000
 comments: true
 published: true
@@ -54,7 +54,7 @@ let cancelDefaultTokenAsync sleepMs = async {
 // cancels tokens related to customCts
 let cancelCustomTokenAsync sleepMs = async {
     do! Async.Sleep sleepMs
-    cts.Cancel()
+    customCts.Cancel()
 }
 
 // cancels tokens related to linkedCts
