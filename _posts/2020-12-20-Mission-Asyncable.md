@@ -7,6 +7,8 @@ published: true
 excerpt_separator: <!--more-->
 ---
 
+# Mission Asyncable - The Basics of Asyncs - Part 1: Cancellation
+
 _This post is part of F# Advent Calendar 2020. Check out other posts [here](https://sergeytihon.com/2020/10/22/f-advent-calendar-in-english-2020/)._
 
 ## Motivation
