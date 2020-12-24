@@ -4,6 +4,7 @@ layout: default
 <div>
 {% for post in site.posts %}
     <p>
+    {{ post.title }}
     {{ post.excerpt }} <a href="{{ post.url }}">Read more...</a>
     </p>
     <hr>
